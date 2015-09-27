@@ -1,3 +1,4 @@
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -28,48 +29,63 @@ import org.encog.util.arrayutil.NormalizedField;
 import org.encog.util.csv.ReadCSV;
 import org.encog.util.simple.EncogUtility;
 
-public class MLP3 {
+public class MLP {
 
-    private static final File MYDIR = new File("..");
+    private final File MYDIR = new File("..");
+    private final int INPUT_WINDOW_SIZE;
+    private final int CAMADA_OCULTA;
+    private final int PREDICT_WINDOW_SIZE;
+    private final double TRAIN_TO_ERROR;
+    private final int INPUTS;
+    private final ArrayList<NormalizedField> NORM;
 
-    private static int INPUT_WINDOW_SIZE;
+    public MLP(int INPUTS, int INPUT_WINDOW_SIZE, int CAMADA_OCULTA, int PREDICT_WINDOW_SIZE, double TRAIN_TO_ERROR) {
 
-    private static int CAMADA_OCULTA;
+        this.INPUT_WINDOW_SIZE = INPUT_WINDOW_SIZE;
+        this.CAMADA_OCULTA = CAMADA_OCULTA;
+        this.PREDICT_WINDOW_SIZE = PREDICT_WINDOW_SIZE;
+        this.TRAIN_TO_ERROR = TRAIN_TO_ERROR;
+        this.INPUTS = INPUTS;
+        NORM = new ArrayList<>();
 
-    private static int PREDICT_WINDOW_SIZE;
+        if (INPUTS == 4) {
 
-    private static double TRAIN_TO_ERROR;
+            NORM.add(new NormalizedField(NormalizationAction.Normalize, "MP", 100, 0, 1, 0));
+            NORM.add(new NormalizedField(NormalizationAction.Normalize, "TEMP", 50, 0, 1, 0));
+            NORM.add(new NormalizedField(NormalizationAction.Normalize, "UR", 100, 0, 1, 0));
+            NORM.add(new NormalizedField(NormalizationAction.Normalize, "VV", 10, 0, 1, 0));
 
-    private static final NormalizedField normMP = new NormalizedField(NormalizationAction.Normalize, "MP", 100, 0, 1, 0);
-    private static final NormalizedField normTEMP = new NormalizedField(NormalizationAction.Normalize, "TEMP", 50, 0, 1, 0);
-    private static final NormalizedField normUR = new NormalizedField(NormalizationAction.Normalize, "UR", 100, 0, 1, 0);
-    private static final NormalizedField normVV = new NormalizedField(NormalizationAction.Normalize, "VV", 10, 0, 1, 0);
+        } else if (INPUTS == 3) {
 
-    public MLP3(int INPUT_WINDOW_SIZE, int CAMADA_OCULTA, int PREDICT_WINDOW_SIZE, double TRAIN_TO_ERROR) {
+            NORM.add(new NormalizedField(NormalizationAction.Normalize, "TEMP", 50, 0, 1, 0));
+            NORM.add(new NormalizedField(NormalizationAction.Normalize, "UR", 100, 0, 1, 0));
+            NORM.add(new NormalizedField(NormalizationAction.Normalize, "VV", 10, 0, 1, 0));
 
-        MLP3.INPUT_WINDOW_SIZE = INPUT_WINDOW_SIZE;
-        MLP3.CAMADA_OCULTA = CAMADA_OCULTA;
-        MLP3.PREDICT_WINDOW_SIZE = PREDICT_WINDOW_SIZE;
-        MLP3.TRAIN_TO_ERROR = TRAIN_TO_ERROR;
+        } else if (INPUTS == 1) {
 
+            NORM.add(new NormalizedField(NormalizationAction.Normalize, "MP", 100, 0, 1, 0));
+
+        }
     }
 
-    public static TemporalMLDataSet initDataSet() {
-        TemporalMLDataSet dataSet = new TemporalMLDataSet(INPUT_WINDOW_SIZE, PREDICT_WINDOW_SIZE);
+    public TemporalMLDataSet initDataSet() {
+        TemporalMLDataSet dataSet;
+        dataSet = new TemporalMLDataSet(INPUT_WINDOW_SIZE, PREDICT_WINDOW_SIZE);
 
-        TemporalDataDescription MP = new TemporalDataDescription(TemporalDataDescription.Type.RAW, false, true);
+        TemporalDataDescription MP = new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, true);
+        dataSet.addDescription(MP);
 
         TemporalDataDescription TEMP = new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false);
         TemporalDataDescription UR = new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false);
         TemporalDataDescription VV = new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false);
-        dataSet.addDescription(MP);
         dataSet.addDescription(TEMP);
         dataSet.addDescription(UR);
         dataSet.addDescription(VV);
+
         return dataSet;
     }
 
-    public static MLRegression trainModel(
+    public MLRegression trainModel(
             MLDataSet trainingData,
             String methodName,
             String methodArchitecture,
@@ -91,25 +107,24 @@ public class MLP3 {
         return (MLRegression) train.getMethod();
     }
 
-    public static TemporalMLDataSet createTraining(File rawFile) {
+    public TemporalMLDataSet createTraining(File rawFile) {
         TemporalMLDataSet trainingData = initDataSet();
         ReadCSV csv = new ReadCSV(rawFile.toString(), true, ';');
         int x = 0;
+        ArrayList<Double> CSV = new ArrayList<>();
         while (csv.next()) {
-            double MP = csv.getDouble(0);
-            double TEMP = csv.getDouble(1);
-            double UR = csv.getDouble(2);
-            double VV = csv.getDouble(3);
 
-            int sequenceNumber = x;
+            for (int y = 0; y < INPUTS; y++) {
+                CSV.add(csv.getDouble(y));
+            }
 
             TemporalPoint point = new TemporalPoint(trainingData.getDescriptions().size());
-            point.setSequence(sequenceNumber);
-            point.setData(0, normMP.normalize(MP));
-            point.setData(1, normTEMP.normalize(TEMP));
-            point.setData(2, normUR.normalize(UR));
-            point.setData(3, normVV.normalize(VV));
+            point.setSequence(x);
+            for (int y = 0; y < INPUTS; y++) {
+                point.setData(y, NORM.get(y).normalize(CSV.get(y)));
+            }
             trainingData.getPoints().add(point);
+
             x++;
         }
         csv.close();
@@ -118,52 +133,49 @@ public class MLP3 {
         return trainingData;
     }
 
-    public static double predict(File rawFile, MLRegression model, int numeroExecucao, Date date) throws IOException {
+    public double predict(File rawFile, MLRegression model, int numeroExecucao, Date date) throws IOException {
 
         TemporalMLDataSet trainingData = initDataSet();
         ReadCSV csv = new ReadCSV(rawFile.toString(), true, ';');
         int x = 0;
-        DateFormat dateFormat = new SimpleDateFormat("dd_MM_yyyy_HH_mm_ss");
-        new File(System.getProperty("user.dir") + "\\MLP3\\" + dateFormat.format(date)).mkdirs();
-        FileWriter arq = new FileWriter(System.getProperty("user.dir") + "\\MLP3\\" + dateFormat.format(date) + "\\MLP3_" + dateFormat.format(date) + "_" + numeroExecucao + ".csv");
-        PrintWriter gravarArq = new PrintWriter(arq);
+        //DateFormat dateFormat = new SimpleDateFormat("dd_MM_yyyy_HH_mm_ss");
+        //new File(System.getProperty("user.dir") + "\\MLP4\\" + dateFormat.format(date)).mkdirs();
+        //FileWriter arq = new FileWriter(System.getProperty("user.dir") + "\\MLP4\\" + dateFormat.format(date) + "\\MLP4_" + dateFormat.format(date) + "_" + numeroExecucao + ".csv");
+        //PrintWriter gravarArq = new PrintWriter(arq);
         NumberFormat nf = NumberFormat.getNumberInstance(Locale.GERMAN);
         double soma = 0;
         int n = 0;
 
-        gravarArq.print("Dia;Real;Previsto;Erro Relativo Percentual\n");
-
+        //gravarArq.print("Dia;Real;Previsto;Erro Relativo Percentual\n");
+        ArrayList<Double> CSV = new ArrayList<>();
         while (csv.next()) {
-            double MP = csv.getDouble(0);
-            double TEMP = csv.getDouble(1);
-            double UR = csv.getDouble(2);
-            double VV = csv.getDouble(3);
+            for (int y = 0; y < INPUTS; y++) {
+                CSV.add(csv.getDouble(y));
+            }
 
             if (trainingData.getPoints().size() >= trainingData.getInputWindowSize()) {
 
                 MLData modelInput = trainingData.generateInputNeuralData(1);
                 MLData modelOutput = model.compute(modelInput);
-                double mp = normMP.deNormalize(modelOutput.getData(0));
-
-                gravarArq.print(x + ";" + nf.format(MP) + ";" + nf.format(mp) + ";" + nf.format(Math.abs(((mp - MP) / MP) * 100)) + "\n");
+                double mp = NORM.get(0).deNormalize(modelOutput.getData(0));
+                double MP = CSV.get(0);
+                //gravarArq.print(x + ";" + nf.format(MP) + ";" + nf.format(mp) + ";" + nf.format(Math.abs(((mp - MP) / MP) * 100)) + "\n");
                 soma = soma + Math.abs(((mp - MP) / MP) * 100);
                 n++;
 
                 trainingData.getPoints().remove(0);
             }
 
-            int sequenceNumber = x;
-
             TemporalPoint point = new TemporalPoint(trainingData.getDescriptions().size());
-            point.setSequence(sequenceNumber);
-            point.setData(0, normMP.normalize(MP));
-            point.setData(1, normTEMP.normalize(TEMP));
-            point.setData(2, normUR.normalize(UR));
-            point.setData(3, normVV.normalize(VV));
+            point.setSequence(x);
+            for (int y = 0; y < INPUTS; y++) {
+                point.setData(y, NORM.get(y).normalize(CSV.get(y)));
+            }
             trainingData.getPoints().add(point);
+
             x++;
         }
-        arq.close();
+        //arq.close();
         csv.close();
 
         //System.out.println("Média Erro do " + dateFormat.format(date) + " = " + nf.format(soma / n));
@@ -193,46 +205,32 @@ public class MLP3 {
 
     public static void main(String[] args) throws IOException {
         Date date = new Date();
-        DateFormat dateFormat = new SimpleDateFormat("dd_MM_yyyy_HH_mm_ss");
+        //DateFormat dateFormat = new SimpleDateFormat("dd_MM_yyyy_HH_mm_ss");
 
         int ENTRADA = 4;
         int OCULTA = 22;
         int PREVER = 1;
-        double ERRO = 0.002;//0.0036;
+        double ERRO = 0.0001;
 
         ArrayList<Double> resultados = new ArrayList<>();
 
-        MLP3 execucao1 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
-        resultados.add(execucao1.executar(1, date));
-        MLP3 execucao2 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
-        resultados.add(execucao2.executar(2, date));
-        MLP3 execucao3 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
-        resultados.add(execucao3.executar(3, date));
-        MLP3 execucao4 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
-        resultados.add(execucao4.executar(4, date));
-        MLP3 execucao5 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
-        resultados.add(execucao5.executar(5, date));
-        MLP3 execucao6 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
-        resultados.add(execucao6.executar(6, date));
-        MLP3 execucao7 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
-        resultados.add(execucao7.executar(7, date));
-        MLP3 execucao8 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
-        resultados.add(execucao8.executar(8, date));
-        MLP3 execucao9 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
-        resultados.add(execucao9.executar(9, date));
-        MLP3 execucao10 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
-        resultados.add(execucao10.executar(10, date));
+        //for (int x = 0; x < 10; x++) {
+            MLP execucao = new MLP(4, ENTRADA, OCULTA, PREVER, ERRO);
+            resultados.add(execucao.executar(1, date));
+        //}
+        
+        //File file = new File(System.getProperty("user.dir"));
+        //File parent = new File(file.getParent(),"\\MLP3\\" + dateFormat.format(date) + "\\MLP3_" + dateFormat.format(date) + "_INFO.txt");
+        //FileWriter fileWriter = new FileWriter(parent);
+        //PrintWriter printWriter = new PrintWriter(fileWriter);
 
-        FileWriter arq = new FileWriter(System.getProperty("user.dir") + "\\MLP3\\" + dateFormat.format(date) + "\\MLP3_" + dateFormat.format(date) + "_INFO.txt");
-        PrintWriter gravarArq = new PrintWriter(arq);
+        //System.out.println(dateFormat.format(date));
+        //printWriter.println(dateFormat.format(date));
 
-        System.out.println(dateFormat.format(date));
-        gravarArq.println(dateFormat.format(date));
-
-        gravarArq.println("Entradas\t" + ENTRADA);
-        gravarArq.println("Camadas Oculta\t" + OCULTA);
-        gravarArq.println("Janela\t" + PREVER);
-        gravarArq.println("Erro\t" + ERRO);
+        //printWriter.println("Entradas\t" + ENTRADA);
+        //printWriter.println("Camadas Oculta\t" + OCULTA);
+        //printWriter.println("Janela\t" + PREVER);
+        //printWriter.println("Erro\t" + ERRO);
         System.out.println("Entradas\t" + ENTRADA);
         System.out.println("Camadas Oculta\t" + OCULTA);
         System.out.println("Janela\t" + PREVER);
@@ -241,15 +239,12 @@ public class MLP3 {
         double soma = 0;
         NumberFormat nf = NumberFormat.getNumberInstance(Locale.GERMAN);
 
-        for (int x = 0; x < 10; x++) {
+        for (int x = 0; x < 1; x++) {
             System.out.println(x + 1 + "\t" + nf.format(resultados.get(x)));
-            gravarArq.println(x + 1 + "\t" + nf.format(resultados.get(x)));
+            //printWriter.println(x + 1 + "\t" + nf.format(resultados.get(x)));
             soma = soma + resultados.get(x);
         }
         System.out.println("Media\t" + nf.format(soma / 10));
-        gravarArq.println("Media\t" + nf.format(soma / 10));
-
-        arq.close();
+        //printWriter.println("Media\t" + nf.format(soma / 10));
     }
-
 }

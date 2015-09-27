@@ -30,7 +30,7 @@ import org.encog.util.simple.EncogUtility;
 
 public class MLP4 {
 
-    private static final File MYDIR = new File(".");
+    private static final File MYDIR = new File("..");
 
     private static int INPUT_WINDOW_SIZE;
 
