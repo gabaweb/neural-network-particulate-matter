@@ -33,46 +33,34 @@ public class MLP {
 
     private final int INPUT_WINDOW_SIZE;
 
-    private final int CAMADA_OCULTA;
+    private final int HIDDEN_LAYER_NEURONS;
 
     private final int PREDICT_WINDOW_SIZE;
 
     private final double TRAIN_TO_ERROR;
-    
-    private final double VARIAVEIS;
 
-    private final ArrayList<NormalizedField> NORM = new ArrayList<>();
+    private final int VARIABLES;
 
-    public MLP(int VARIAVEIS, int INPUT_WINDOW_SIZE, int CAMADA_OCULTA, int PREDICT_WINDOW_SIZE, double TRAIN_TO_ERROR) {
+    private final boolean INPUT;
 
+    private final ArrayList<NormalizedField> NORMALIZATIONS;
+
+    public MLP(boolean INPUT, int VARIABLES, int INPUT_WINDOW_SIZE, int HIDDEN_LAYER_NEURONS, int PREDICT_WINDOW_SIZE, double TRAIN_TO_ERROR, ArrayList<NormalizedField> NORM) {
         this.INPUT_WINDOW_SIZE = INPUT_WINDOW_SIZE;
-        this.CAMADA_OCULTA = CAMADA_OCULTA;
+        this.HIDDEN_LAYER_NEURONS = HIDDEN_LAYER_NEURONS;
         this.PREDICT_WINDOW_SIZE = PREDICT_WINDOW_SIZE;
         this.TRAIN_TO_ERROR = TRAIN_TO_ERROR;
-        this.VARIAVEIS = VARIAVEIS;
-        NORM.add(new NormalizedField(NormalizationAction.Normalize, "MP", 100, 0, 1, 0));
-        NORM.add(new NormalizedField(NormalizationAction.Normalize, "TEMP", 50, 0, 1, 0));
-        NORM.add(new NormalizedField(NormalizationAction.Normalize, "UR", 100, 0, 1, 0));
-        NORM.add(new NormalizedField(NormalizationAction.Normalize, "VV", 10, 0, 1, 0));
-
+        this.VARIABLES = VARIABLES;
+        this.INPUT = INPUT;
+        this.NORMALIZATIONS = NORM;
     }
 
     public TemporalMLDataSet initDataSet() {
         TemporalMLDataSet dataSet = new TemporalMLDataSet(INPUT_WINDOW_SIZE, PREDICT_WINDOW_SIZE);
-        if (VARIAVEIS == 1) {
-            dataSet.addDescription(new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, true));
-        } else if (VARIAVEIS == 3) {
-            dataSet.addDescription(new TemporalDataDescription(TemporalDataDescription.Type.RAW, false, true));
-            dataSet.addDescription(new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false));
-            dataSet.addDescription(new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false));
-            dataSet.addDescription(new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false));
-        } else if (VARIAVEIS == 4) {
-            dataSet.addDescription(new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, true));
-            dataSet.addDescription(new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false));
-            dataSet.addDescription(new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false));
+        dataSet.addDescription(new TemporalDataDescription(TemporalDataDescription.Type.RAW, INPUT, true));
+        for (int x = 0; x < VARIABLES; x++) {
             dataSet.addDescription(new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false));
         }
-
         return dataSet;
     }
 
@@ -85,13 +73,15 @@ public class MLP {
 
         MLMethodFactory methodFactory = new MLMethodFactory();
         MLMethod method = methodFactory.create(methodName, methodArchitecture, trainingData.getInputSize(), trainingData.getIdealSize());
-
+        
         MLTrainFactory trainFactory = new MLTrainFactory();
         MLTrain train = trainFactory.create(method, trainingData, trainerName, trainerArgs);
 
-        if (method instanceof MLResettable && !(train instanceof ManhattanPropagation)) {
-            train.addStrategy(new RequiredImprovementStrategy(500));
-        }
+        
+        
+        //if (method instanceof MLResettable && !(train instanceof ManhattanPropagation)) {
+        //    train.addStrategy(new RequiredImprovementStrategy(500));
+        //}
 
         EncogUtility.trainToError(train, TRAIN_TO_ERROR);
 
@@ -107,9 +97,9 @@ public class MLP {
             TemporalPoint point = new TemporalPoint(trainingData.getDescriptions().size());
             point.setSequence(x);
 
-            for (int y = 0; y < VARIAVEIS; y++) {
+            for (int y = 0; y < VARIABLES; y++) {
 
-                point.setData(y, NORM.get(y).normalize(csv.getDouble(y)));
+                point.setData(y, NORMALIZATIONS.get(y).normalize(csv.getDouble(y)));
 
             }
 
@@ -123,13 +113,13 @@ public class MLP {
     }
 
     public double predict(File rawFile, MLRegression model, int numeroExecucao, Date date) throws IOException {
-
+        
         TemporalMLDataSet trainingData = initDataSet();
         ReadCSV csv = new ReadCSV(rawFile.toString(), true, ';');
 
         DateFormat dateFormat = new SimpleDateFormat("dd_MM_yyyy_HH_mm_ss");
-        new File(System.getProperty("user.dir") + "\\MLP_" + VARIAVEIS + "\\" + dateFormat.format(date)).mkdirs();
-        FileWriter arq = new FileWriter(System.getProperty("user.dir") + "\\MLP_" + VARIAVEIS + "\\" + dateFormat.format(date) + "\\MLP_" + VARIAVEIS + "_" + dateFormat.format(date) + "_" + numeroExecucao + ".csv");
+        new File(new File(".."), "\\MLP_" + VARIABLES + "\\" + dateFormat.format(date)).mkdirs();
+        FileWriter arq = new FileWriter(new File(new File(".."), "\\MLP_" + VARIABLES + "\\" + dateFormat.format(date) + "\\MLP_" + VARIABLES + "_" + dateFormat.format(date) + "_" + numeroExecucao + ".csv"));
         PrintWriter gravarArq = new PrintWriter(arq);
         NumberFormat nf = NumberFormat.getNumberInstance(Locale.GERMAN);
         double soma = 0;
@@ -142,7 +132,7 @@ public class MLP {
 
                 MLData modelInput = trainingData.generateInputNeuralData(1);
                 MLData modelOutput = model.compute(modelInput);
-                double MP = NORM.get(0).deNormalize(modelOutput.getData(0));
+                double MP = NORMALIZATIONS.get(0).deNormalize(modelOutput.getData(0));
 
                 gravarArq.print(x + ";" + nf.format(csv.getDouble(0)) + ";" + nf.format(MP) + ";" + nf.format(Math.abs(((MP - csv.getDouble(0)) / csv.getDouble(0)) * 100)) + "\n");
                 soma = soma + Math.abs(((MP - csv.getDouble(0)) / csv.getDouble(0)) * 100);
@@ -152,9 +142,9 @@ public class MLP {
 
             TemporalPoint point = new TemporalPoint(trainingData.getDescriptions().size());
             point.setSequence(x);
-            for (int y = 0; y < VARIAVEIS; y++) {
+            for (int y = 0; y < VARIABLES; y++) {
 
-                point.setData(y, NORM.get(y).normalize(csv.getDouble(y)));
+                point.setData(y, NORMALIZATIONS.get(y).normalize(csv.getDouble(y)));
 
             }
             trainingData.getPoints().add(point);
@@ -167,86 +157,68 @@ public class MLP {
         return soma / x;
     }
 
-    public double executar(int numeroExecucao, Date date) throws IOException {
-        File arquivoTeste = new File(new File(".."), "25_teste.csv");
-        File arquivoTreinamento = new File(new File(".."), "25_treinamento.csv");
+    public double execute(int numeroExecucao, Date date) throws IOException {
+        File testFile = new File(new File(".."), "25_teste.csv");
+        File trainingFile = new File(new File(".."), "25_treinamento.csv");
 
-        TemporalMLDataSet trainingData = createTraining(arquivoTreinamento);
+        TemporalMLDataSet trainingData = createTraining(trainingFile);
 
         MLRegression model = trainModel(
                 trainingData,
                 MLMethodFactory.TYPE_FEEDFORWARD,
-                "?:B->SIGMOID->" + CAMADA_OCULTA + ":B->SIGMOID->?",
+                "?:B->SIGMOID->" + HIDDEN_LAYER_NEURONS + ":B->SIGMOID->?",
                 MLTrainFactory.TYPE_RPROP,
                 "");
 
-        double erro = predict(arquivoTeste, model, numeroExecucao, date);
+        double error = predict(testFile, model, numeroExecucao, date);
 
         Encog.getInstance().shutdown();
 
-        return erro;
+        return error;
     }
 
     public static void main(String[] args) throws IOException {
         Date date = new Date();
-        DateFormat dateFormat = new SimpleDateFormat("dd_MM_yyyy_HH_mm_ss");
-        
-        int variaveis = 1;
-        int janelaEntrada = 4;
-        int oculta = 22;
-        int janelaPrever = 1;
-        double ERRO = 0.002;
+        boolean input = false;
+        int variables = 4;
+        int repetitions = 10;
+        int inputWindowSize = 4;
+        int hiddenLayerNeurons = 22;
+        int predictWindowSize = 1;
+        double trainToError = 0.002;
+        ArrayList<Double> results = new ArrayList<>();
 
-        ArrayList<Double> resultados = new ArrayList<>();
+        ArrayList<NormalizedField> normalizations = new ArrayList<>();
 
-        MLP execucao1 = new MLP(variaveis, janelaEntrada, oculta, janelaPrever, ERRO);
-        resultados.add(execucao1.executar(1, date));
-        MLP execucao2 = new MLP(variaveis, janelaEntrada, oculta, janelaPrever, ERRO);
-        resultados.add(execucao2.executar(2, date));
-        MLP execucao3 = new MLP(variaveis, janelaEntrada, oculta, janelaPrever, ERRO);
-        resultados.add(execucao3.executar(3, date));
-        MLP execucao4 = new MLP(variaveis, janelaEntrada, oculta, janelaPrever, ERRO);
-        resultados.add(execucao4.executar(4, date));
-        MLP execucao5 = new MLP(variaveis, janelaEntrada, oculta, janelaPrever, ERRO);
-        resultados.add(execucao5.executar(5, date));
-        MLP execucao6 = new MLP(variaveis, janelaEntrada, oculta, janelaPrever, ERRO);
-        resultados.add(execucao6.executar(6, date));
-        MLP execucao7 = new MLP(variaveis, janelaEntrada, oculta, janelaPrever, ERRO);
-        resultados.add(execucao7.executar(7, date));
-        MLP execucao8 = new MLP(variaveis, janelaEntrada, oculta, janelaPrever, ERRO);
-        resultados.add(execucao8.executar(8, date));
-        MLP execucao9 = new MLP(variaveis, janelaEntrada, oculta, janelaPrever, ERRO);
-        resultados.add(execucao9.executar(9, date));
-        MLP execucao10 = new MLP(variaveis, janelaEntrada, oculta, janelaPrever, ERRO);
-        resultados.add(execucao10.executar(10, date));
+        normalizations.add(new NormalizedField(NormalizationAction.Normalize, "MP", 100, 0, 1, 0));
+        normalizations.add(new NormalizedField(NormalizationAction.Normalize, "TEMP", 50, 0, 1, 0));
+        normalizations.add(new NormalizedField(NormalizationAction.Normalize, "UR", 100, 0, 1, 0));
+        normalizations.add(new NormalizedField(NormalizationAction.Normalize, "VV", 10, 0, 1, 0));
 
-        //FileWriter arq = new FileWriter(System.getProperty("user.dir") + "\\MLP4\\" + dateFormat.format(date) + "\\MLP4_" + dateFormat.format(date) + "_INFO.txt");
-        //PrintWriter gravarArq = new PrintWriter(arq);
+        for (int x = 1; x <= repetitions; x++) {
+            results.add(new MLP(input,
+                    variables,
+                    inputWindowSize,
+                    hiddenLayerNeurons,
+                    predictWindowSize,
+                    trainToError,
+                    normalizations).execute(x, date));
+        }
 
-        System.out.println(dateFormat.format(date));
-        //gravarArq.println(dateFormat.format(date));
-
-        //gravarArq.println("Entradas\t" + janelaEntrada);
-        //gravarArq.println("Camadas Oculta\t" + oculta);
-        //gravarArq.println("Janela\t" + janelaPrever);
-        //gravarArq.println("Erro\t" + ERRO);
-        System.out.println("Entradas\t" + janelaEntrada);
-        System.out.println("Camadas Oculta\t" + oculta);
-        System.out.println("Janela\t" + janelaPrever);
-        System.out.println("Erro\t" + ERRO);
+        System.out.println(new SimpleDateFormat("dd_MM_yyyy_HH_mm_ss").format(date));
+        System.out.println("Entradas\t" + inputWindowSize);
+        System.out.println("Camadas Oculta\t" + hiddenLayerNeurons);
+        System.out.println("Janela\t" + predictWindowSize);
+        System.out.println("Erro\t" + trainToError);
 
         double soma = 0;
-        NumberFormat nf = NumberFormat.getNumberInstance(Locale.GERMAN);
 
-        for (int x = 0; x < 10; x++) {
-            System.out.println(x + 1 + "\t" + nf.format(resultados.get(x)));
-            //gravarArq.println(x + 1 + "\t" + nf.format(resultados.get(x)));
-            soma = soma + resultados.get(x);
+        for (int x = 0; x < repetitions; x++) {
+            System.out.println(x + 1 + "\t" + NumberFormat.getNumberInstance(Locale.GERMAN).format(results.get(x)));
+            soma = soma + results.get(x);
         }
-        System.out.println("Media\t" + nf.format(soma / 10));
-        //gravarArq.println("Media\t" + nf.format(soma / 10));
 
-        //arq.close();
+        System.out.println("Media\t" + NumberFormat.getNumberInstance(Locale.GERMAN).format(soma / 10));
     }
 
 }
