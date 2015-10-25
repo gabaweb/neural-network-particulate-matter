@@ -23,6 +23,7 @@ import org.encog.ml.factory.MLMethodFactory;
 import org.encog.ml.factory.MLTrainFactory;
 import org.encog.ml.train.MLTrain;
 import org.encog.ml.train.strategy.RequiredImprovementStrategy;
+import org.encog.ml.train.strategy.end.SimpleEarlyStoppingStrategy;
 import org.encog.neural.networks.training.propagation.manhattan.ManhattanPropagation;
 import org.encog.util.arrayutil.NormalizationAction;
 import org.encog.util.arrayutil.NormalizedField;
@@ -54,40 +55,27 @@ public class MLP {
         this.INPUT = INPUT;
         this.NORMALIZATIONS = NORM;
     }
+    
+    public double execute(int numeroExecucao, Date date) throws IOException {
 
-    public TemporalMLDataSet initDataSet() {
-        TemporalMLDataSet dataSet = new TemporalMLDataSet(INPUT_WINDOW_SIZE, PREDICT_WINDOW_SIZE);
-        dataSet.addDescription(new TemporalDataDescription(TemporalDataDescription.Type.RAW, INPUT, true));
-        for (int x = 0; x < VARIABLES; x++) {
-            dataSet.addDescription(new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false));
-        }
-        return dataSet;
+        TemporalMLDataSet trainingData = createTraining(new File(new File(".."), "25_treinamento.csv"));
+        TemporalMLDataSet validatingData = createTraining(new File(new File(".."), "25_teste.csv"));
+        
+        MLRegression model = trainModel(
+                trainingData,
+                validatingData,
+                MLMethodFactory.TYPE_FEEDFORWARD,
+                "?:B->SIGMOID->" + HIDDEN_LAYER_NEURONS + ":B->SIGMOID->?",
+                MLTrainFactory.TYPE_RPROP,
+                "");
+
+        double error = predict(new File(new File(".."), "25_teste.csv"), model, numeroExecucao, date);
+
+        Encog.getInstance().shutdown();
+
+        return error;
     }
-
-    public MLRegression trainModel(
-            MLDataSet trainingData,
-            String methodName,
-            String methodArchitecture,
-            String trainerName,
-            String trainerArgs) {
-
-        MLMethodFactory methodFactory = new MLMethodFactory();
-        MLMethod method = methodFactory.create(methodName, methodArchitecture, trainingData.getInputSize(), trainingData.getIdealSize());
-        
-        MLTrainFactory trainFactory = new MLTrainFactory();
-        MLTrain train = trainFactory.create(method, trainingData, trainerName, trainerArgs);
-
-        
-        
-        //if (method instanceof MLResettable && !(train instanceof ManhattanPropagation)) {
-        //    train.addStrategy(new RequiredImprovementStrategy(500));
-        //}
-
-        EncogUtility.trainToError(train, TRAIN_TO_ERROR);
-
-        return (MLRegression) train.getMethod();
-    }
-
+    
     public TemporalMLDataSet createTraining(File rawFile) {
         TemporalMLDataSet trainingData = initDataSet();
         ReadCSV csv = new ReadCSV(rawFile.toString(), true, ';');
@@ -110,6 +98,40 @@ public class MLP {
 
         trainingData.generate();
         return trainingData;
+    }
+
+    public TemporalMLDataSet initDataSet() {
+        TemporalMLDataSet dataSet = new TemporalMLDataSet(INPUT_WINDOW_SIZE, PREDICT_WINDOW_SIZE);
+        dataSet.addDescription(new TemporalDataDescription(TemporalDataDescription.Type.RAW, INPUT, true));
+        for (int x = 0; x < VARIABLES; x++) {
+            dataSet.addDescription(new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false));
+        }
+        return dataSet;
+    }
+
+    public MLRegression trainModel(
+            MLDataSet trainingData,
+            MLDataSet validatingData,
+            String methodName,
+            String methodArchitecture,
+            String trainerName,
+            String trainerArgs) {
+
+        MLMethodFactory methodFactory = new MLMethodFactory();
+        MLMethod method = methodFactory.create(methodName, methodArchitecture, trainingData.getInputSize(), trainingData.getIdealSize());
+        
+        MLTrainFactory trainFactory = new MLTrainFactory();
+        MLTrain train = trainFactory.create(method, trainingData, trainerName, trainerArgs);
+
+        train.addStrategy(new SimpleEarlyStoppingStrategy(validatingData));
+        
+        //if (method instanceof MLResettable && !(train instanceof ManhattanPropagation)) {
+        //    train.addStrategy(new RequiredImprovementStrategy(500));
+        //}
+
+        EncogUtility.trainToError(train, TRAIN_TO_ERROR);
+
+        return (MLRegression) train.getMethod();
     }
 
     public double predict(File rawFile, MLRegression model, int numeroExecucao, Date date) throws IOException {
@@ -155,26 +177,6 @@ public class MLP {
         //System.out.println("Média Erro do " + dateFormat.format(date) + " = " + nf.format(soma / n));
         trainingData.generate();
         return soma / x;
-    }
-
-    public double execute(int numeroExecucao, Date date) throws IOException {
-        File testFile = new File(new File(".."), "25_teste.csv");
-        File trainingFile = new File(new File(".."), "25_treinamento.csv");
-
-        TemporalMLDataSet trainingData = createTraining(trainingFile);
-
-        MLRegression model = trainModel(
-                trainingData,
-                MLMethodFactory.TYPE_FEEDFORWARD,
-                "?:B->SIGMOID->" + HIDDEN_LAYER_NEURONS + ":B->SIGMOID->?",
-                MLTrainFactory.TYPE_RPROP,
-                "");
-
-        double error = predict(testFile, model, numeroExecucao, date);
-
-        Encog.getInstance().shutdown();
-
-        return error;
     }
 
     public static void main(String[] args) throws IOException {
