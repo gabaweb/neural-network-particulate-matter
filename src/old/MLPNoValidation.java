@@ -1,3 +1,6 @@
+package old;
+
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -12,6 +15,7 @@ import java.util.Locale;
 import org.encog.Encog;
 import org.encog.ml.MLMethod;
 import org.encog.ml.MLRegression;
+import org.encog.ml.MLResettable;
 import org.encog.ml.data.MLData;
 import org.encog.ml.data.MLDataSet;
 import org.encog.ml.data.temporal.TemporalDataDescription;
@@ -20,11 +24,15 @@ import org.encog.ml.data.temporal.TemporalPoint;
 import org.encog.ml.factory.MLMethodFactory;
 import org.encog.ml.factory.MLTrainFactory;
 import org.encog.ml.train.MLTrain;
+import org.encog.ml.train.strategy.RequiredImprovementStrategy;
 import org.encog.ml.train.strategy.end.SimpleEarlyStoppingStrategy;
+import org.encog.neural.networks.training.propagation.manhattan.ManhattanPropagation;
+import org.encog.util.arrayutil.NormalizationAction;
 import org.encog.util.arrayutil.NormalizedField;
 import org.encog.util.csv.ReadCSV;
+import org.encog.util.simple.EncogUtility;
 
-public class MLP {
+public class MLPNoValidation {
 
     private final int INPUT_WINDOW_SIZE;
 
@@ -32,56 +40,44 @@ public class MLP {
 
     private final int PREDICT_WINDOW_SIZE;
 
+    private final double TRAIN_TO_ERROR;
+
     private final int VARIABLES;
 
     private final boolean INPUT;
 
     private final ArrayList<NormalizedField> NORMALIZATIONS;
 
-    private final File TRANING_FILE;
-
-    private final File VALIDATION_FILE;
-
-    private final File TEST_FILE;
-
-    private final int EXECUTION;
-
-    private final Date DATE;
-
-    public MLP(boolean INPUT, int VARIABLES, int INPUT_WINDOW_SIZE, int HIDDEN_LAYER_NEURONS, int PREDICT_WINDOW_SIZE, ArrayList<NormalizedField> NORM, String DATASET, int EXECUTION, Date DATE) {
-
+    public MLPNoValidation(boolean INPUT, int VARIABLES, int INPUT_WINDOW_SIZE, int HIDDEN_LAYER_NEURONS, int PREDICT_WINDOW_SIZE, double TRAIN_TO_ERROR, ArrayList<NormalizedField> NORM) {
         this.INPUT_WINDOW_SIZE = INPUT_WINDOW_SIZE;
         this.HIDDEN_LAYER_NEURONS = HIDDEN_LAYER_NEURONS;
         this.PREDICT_WINDOW_SIZE = PREDICT_WINDOW_SIZE;
+        this.TRAIN_TO_ERROR = TRAIN_TO_ERROR;
         this.VARIABLES = VARIABLES;
         this.INPUT = INPUT;
         this.NORMALIZATIONS = NORM;
-        this.TRANING_FILE = new File(new File(".."), DATASET + "_TREINAMENTO.csv");
-        this.VALIDATION_FILE = new File(new File(".."), DATASET + "_VALIDACAO.csv");
-        this.TEST_FILE = new File(new File(".."), DATASET + "_TESTE.csv");
-        this.EXECUTION = EXECUTION;
-        this.DATE = DATE;
     }
+    
+    public double execute(int numeroExecucao, Date date) throws IOException {
 
-    public double execute() throws IOException {
-        TemporalMLDataSet trainingData = createTraining(TRANING_FILE);
-        TemporalMLDataSet validadingData = createTraining(VALIDATION_FILE);
-
+        TemporalMLDataSet trainingData = createTraining(new File(new File(".."), "25_treinamento.csv"));
+        TemporalMLDataSet validatingData = createTraining(new File(new File(".."), "25_teste.csv"));
+        
         MLRegression model = trainModel(
                 trainingData,
-                validadingData,
+                validatingData,
                 MLMethodFactory.TYPE_FEEDFORWARD,
                 "?:B->SIGMOID->" + HIDDEN_LAYER_NEURONS + ":B->SIGMOID->?",
                 MLTrainFactory.TYPE_RPROP,
                 "");
 
-        double erro = predict(TEST_FILE, model);
+        double error = predict(new File(new File(".."), "25_teste.csv"), model, numeroExecucao, date);
 
         Encog.getInstance().shutdown();
 
-        return erro;
+        return error;
     }
-
+    
     public TemporalMLDataSet createTraining(File rawFile) {
         TemporalMLDataSet trainingData = initDataSet();
         ReadCSV csv = new ReadCSV(rawFile.toString(), true, ';');
@@ -117,7 +113,7 @@ public class MLP {
 
     public MLRegression trainModel(
             MLDataSet trainingData,
-            MLDataSet validadingData,
+            MLDataSet validatingData,
             String methodName,
             String methodArchitecture,
             String trainerName,
@@ -125,35 +121,29 @@ public class MLP {
 
         MLMethodFactory methodFactory = new MLMethodFactory();
         MLMethod method = methodFactory.create(methodName, methodArchitecture, trainingData.getInputSize(), trainingData.getIdealSize());
-
+        
         MLTrainFactory trainFactory = new MLTrainFactory();
         MLTrain train = trainFactory.create(method, trainingData, trainerName, trainerArgs);
 
-        SimpleEarlyStoppingStrategy stop = new SimpleEarlyStoppingStrategy(validadingData, 100);
+        train.addStrategy(new SimpleEarlyStoppingStrategy(validatingData));
+        
+        //if (method instanceof MLResettable && !(train instanceof ManhattanPropagation)) {
+        //    train.addStrategy(new RequiredImprovementStrategy(500));
+        //}
 
-        train.addStrategy(stop);
-
-        int epoch = 1;
-
-        while (!stop.shouldStop()) {
-            train.iteration();
-            System.out.println("Epoch #" + epoch + " Validation Error: " + stop.getValidationError());
-            epoch++;
-        }
-
-        train.finishTraining();
+        EncogUtility.trainToError(train, TRAIN_TO_ERROR);
 
         return (MLRegression) train.getMethod();
     }
 
-    public double predict(File rawFile, MLRegression model) throws IOException {
-
+    public double predict(File rawFile, MLRegression model, int numeroExecucao, Date date) throws IOException {
+        
         TemporalMLDataSet trainingData = initDataSet();
         ReadCSV csv = new ReadCSV(rawFile.toString(), true, ';');
 
         DateFormat dateFormat = new SimpleDateFormat("dd_MM_yyyy_HH_mm_ss");
-        new File(new File(".."), "\\results\\" + dateFormat.format(DATE)).mkdirs();
-        FileWriter arq = new FileWriter(new File(new File(".."), "\\results\\" + dateFormat.format(DATE) + "\\" + dateFormat.format(DATE) + "_" + EXECUTION + ".csv"));
+        new File(new File(".."), "\\MLP_" + VARIABLES + "\\" + dateFormat.format(date)).mkdirs();
+        FileWriter arq = new FileWriter(new File(new File(".."), "\\MLP_" + VARIABLES + "\\" + dateFormat.format(date) + "\\MLP_" + VARIABLES + "_" + dateFormat.format(date) + "_" + numeroExecucao + ".csv"));
         PrintWriter gravarArq = new PrintWriter(arq);
         NumberFormat nf = NumberFormat.getNumberInstance(Locale.GERMAN);
         double soma = 0;
@@ -186,7 +176,53 @@ public class MLP {
         arq.close();
         csv.close();
 
+        //System.out.println("Média Erro do " + dateFormat.format(date) + " = " + nf.format(soma / n));
         trainingData.generate();
         return soma / x;
     }
+
+    public static void main(String[] args) throws IOException {
+        Date date = new Date();
+        boolean input = true;
+        int variables = 4;
+        int repetitions = 10;
+        int inputWindowSize = 4;
+        int hiddenLayerNeurons = 22;
+        int predictWindowSize = 1;
+        double trainToError = 0.002;
+        ArrayList<Double> results = new ArrayList<>();
+
+        ArrayList<NormalizedField> normalizations = new ArrayList<>();
+
+        normalizations.add(new NormalizedField(NormalizationAction.Normalize, "MP", 100, 0, 1, 0));
+        normalizations.add(new NormalizedField(NormalizationAction.Normalize, "TEMP", 50, 0, 1, 0));
+        normalizations.add(new NormalizedField(NormalizationAction.Normalize, "UR", 100, 0, 1, 0));
+        normalizations.add(new NormalizedField(NormalizationAction.Normalize, "VV", 10, 0, 1, 0));
+
+        for (int x = 1; x <= repetitions; x++) {
+            results.add(new MLPNoValidation(input,
+                    variables,
+                    inputWindowSize,
+                    hiddenLayerNeurons,
+                    predictWindowSize,
+                    trainToError,
+                    normalizations).execute(x, date));
+        }
+
+        System.out.println(new SimpleDateFormat("dd_MM_yyyy_HH_mm_ss").format(date));
+        System.out.println("Entradas\t" + inputWindowSize);
+        System.out.println("Camadas Oculta\t" + hiddenLayerNeurons);
+        System.out.println("Janela\t" + predictWindowSize);
+        System.out.println("Erro\t" + trainToError);
+
+        double soma = 0;
+
+        for (int x = 0; x < repetitions; x++) {
+            System.out.println(x + 1 + "\t" + NumberFormat.getNumberInstance(Locale.GERMAN).format(results.get(x)));
+            soma = soma + results.get(x);
+        }
+
+        System.out.println("Media\t" + NumberFormat.getNumberInstance(Locale.GERMAN).format(soma / 10));
+    }
+
 }

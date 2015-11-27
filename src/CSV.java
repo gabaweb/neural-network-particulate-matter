@@ -124,7 +124,7 @@ public class CSV {
 
     public void salvar() throws IOException{
     //SALVAR
-        FileWriter arq = new FileWriter("tratado.csv");
+        FileWriter arq = new FileWriter("TRATADO_UR.csv");
         PrintWriter gravarArq = new PrintWriter(arq);
         int x;
         int y;
@@ -142,14 +142,14 @@ public class CSV {
     public static void main(String args[]) throws FileNotFoundException, IOException, ParseException {
 
         //TESTAR
-        CSV csv = new CSV("dados.csv");
+        CSV csv = new CSV("BRUTO_UR.csv");
         csv.adicionarColuna(csv.tratarColuna(csv.mediaColuna(2)));
-        csv.adicionarColuna(csv.tratarColuna(csv.mediaColuna(3)));
-        csv.adicionarColuna(csv.tratarColuna(csv.mediaColuna(4)));
+        //csv.adicionarColuna(csv.tratarColuna(csv.mediaColuna(3)));
+        //csv.adicionarColuna(csv.tratarColuna(csv.mediaColuna(4)));
         //for (int x = 0; x < csv.dados.size(); x++){
         //    System.out.println(x+" "+csv.dados.get(x).get(5));
         //}
-        csv.adicionarColuna(csv.tratarColuna(csv.mediaColuna(5)));
+        //csv.adicionarColuna(csv.tratarColuna(csv.mediaColuna(5)));
         csv.salvar();
 
     }

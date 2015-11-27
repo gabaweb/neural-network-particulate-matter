@@ -1,3 +1,5 @@
+package old;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -22,13 +24,14 @@ import org.encog.ml.factory.MLMethodFactory;
 import org.encog.ml.factory.MLTrainFactory;
 import org.encog.ml.train.MLTrain;
 import org.encog.ml.train.strategy.RequiredImprovementStrategy;
+import org.encog.ml.train.strategy.end.SimpleEarlyStoppingStrategy;
 import org.encog.neural.networks.training.propagation.manhattan.ManhattanPropagation;
 import org.encog.util.arrayutil.NormalizationAction;
 import org.encog.util.arrayutil.NormalizedField;
 import org.encog.util.csv.ReadCSV;
 import org.encog.util.simple.EncogUtility;
 
-public class MLP3 {
+public class MLP4 {
 
     private static final File MYDIR = new File("..");
 
@@ -45,19 +48,19 @@ public class MLP3 {
     private static final NormalizedField normUR = new NormalizedField(NormalizationAction.Normalize, "UR", 100, 0, 1, 0);
     private static final NormalizedField normVV = new NormalizedField(NormalizationAction.Normalize, "VV", 10, 0, 1, 0);
 
-    public MLP3(int INPUT_WINDOW_SIZE, int CAMADA_OCULTA, int PREDICT_WINDOW_SIZE, double TRAIN_TO_ERROR) {
+    public MLP4(int INPUT_WINDOW_SIZE, int CAMADA_OCULTA, int PREDICT_WINDOW_SIZE, double TRAIN_TO_ERROR) {
 
-        MLP3.INPUT_WINDOW_SIZE = INPUT_WINDOW_SIZE;
-        MLP3.CAMADA_OCULTA = CAMADA_OCULTA;
-        MLP3.PREDICT_WINDOW_SIZE = PREDICT_WINDOW_SIZE;
-        MLP3.TRAIN_TO_ERROR = TRAIN_TO_ERROR;
+        MLP4.INPUT_WINDOW_SIZE = INPUT_WINDOW_SIZE;
+        MLP4.CAMADA_OCULTA = CAMADA_OCULTA;
+        MLP4.PREDICT_WINDOW_SIZE = PREDICT_WINDOW_SIZE;
+        MLP4.TRAIN_TO_ERROR = TRAIN_TO_ERROR;
 
     }
 
     public static TemporalMLDataSet initDataSet() {
         TemporalMLDataSet dataSet = new TemporalMLDataSet(INPUT_WINDOW_SIZE, PREDICT_WINDOW_SIZE);
 
-        TemporalDataDescription MP = new TemporalDataDescription(TemporalDataDescription.Type.RAW, false, true);
+        TemporalDataDescription MP = new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, true);
 
         TemporalDataDescription TEMP = new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false);
         TemporalDataDescription UR = new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false);
@@ -71,6 +74,7 @@ public class MLP3 {
 
     public static MLRegression trainModel(
             MLDataSet trainingData,
+            MLDataSet validadingData,
             String methodName,
             String methodArchitecture,
             String trainerName,
@@ -82,11 +86,22 @@ public class MLP3 {
         MLTrainFactory trainFactory = new MLTrainFactory();
         MLTrain train = trainFactory.create(method, trainingData, trainerName, trainerArgs);
 
-        if (method instanceof MLResettable && !(train instanceof ManhattanPropagation)) {
-            train.addStrategy(new RequiredImprovementStrategy(500));
+        SimpleEarlyStoppingStrategy stop = new SimpleEarlyStoppingStrategy(validadingData, 100);
+
+        train.addStrategy(stop);
+
+        //if (method instanceof MLResettable && !(train instanceof ManhattanPropagation)) {
+        //    train.addStrategy(new RequiredImprovementStrategy(500));
+        //}
+        int epoch = 1;
+
+        while (!stop.shouldStop()) {
+            train.iteration();
+            System.out.println("Epoch #" + epoch + " Validation Error: " + stop.getValidationError());
+            epoch++;
         }
 
-        EncogUtility.trainToError(train, TRAIN_TO_ERROR);
+        train.finishTraining();
 
         return (MLRegression) train.getMethod();
     }
@@ -124,8 +139,8 @@ public class MLP3 {
         ReadCSV csv = new ReadCSV(rawFile.toString(), true, ';');
         int x = 0;
         DateFormat dateFormat = new SimpleDateFormat("dd_MM_yyyy_HH_mm_ss");
-        new File(System.getProperty("user.dir") + "\\MLP3\\" + dateFormat.format(date)).mkdirs();
-        FileWriter arq = new FileWriter(System.getProperty("user.dir") + "\\MLP3\\" + dateFormat.format(date) + "\\MLP3_" + dateFormat.format(date) + "_" + numeroExecucao + ".csv");
+        new File(System.getProperty("user.dir") + "\\MLP4\\" + dateFormat.format(date)).mkdirs();
+        FileWriter arq = new FileWriter(System.getProperty("user.dir") + "\\MLP4\\" + dateFormat.format(date) + "\\MLP4_" + dateFormat.format(date) + "_" + numeroExecucao + ".csv");
         PrintWriter gravarArq = new PrintWriter(arq);
         NumberFormat nf = NumberFormat.getNumberInstance(Locale.GERMAN);
         double soma = 0;
@@ -173,12 +188,16 @@ public class MLP3 {
 
     public double executar(int numeroExecucao, Date date) throws IOException {
         File arquivoTeste = new File(MYDIR, "25_teste.csv");
-        File arquivoTreinamento = new File(MYDIR, "25_treinamento.csv");
+        File arquivoTreinamento = new File(MYDIR, "25_treinamento2.csv");
+        File arquivoValidacao = new File(MYDIR, "25_validacao2.csv");
+
 
         TemporalMLDataSet trainingData = createTraining(arquivoTreinamento);
+        TemporalMLDataSet validadingData = createTraining(arquivoValidacao);
 
         MLRegression model = trainModel(
                 trainingData,
+                validadingData,
                 MLMethodFactory.TYPE_FEEDFORWARD,
                 "?:B->SIGMOID->" + CAMADA_OCULTA + ":B->SIGMOID->?",
                 MLTrainFactory.TYPE_RPROP,
@@ -202,28 +221,28 @@ public class MLP3 {
 
         ArrayList<Double> resultados = new ArrayList<>();
 
-        MLP3 execucao1 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP4 execucao1 = new MLP4(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao1.executar(1, date));
-        MLP3 execucao2 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP4 execucao2 = new MLP4(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao2.executar(2, date));
-        MLP3 execucao3 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP4 execucao3 = new MLP4(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao3.executar(3, date));
-        MLP3 execucao4 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP4 execucao4 = new MLP4(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao4.executar(4, date));
-        MLP3 execucao5 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP4 execucao5 = new MLP4(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao5.executar(5, date));
-        MLP3 execucao6 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP4 execucao6 = new MLP4(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao6.executar(6, date));
-        MLP3 execucao7 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP4 execucao7 = new MLP4(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao7.executar(7, date));
-        MLP3 execucao8 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP4 execucao8 = new MLP4(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao8.executar(8, date));
-        MLP3 execucao9 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP4 execucao9 = new MLP4(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao9.executar(9, date));
-        MLP3 execucao10 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP4 execucao10 = new MLP4(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao10.executar(10, date));
 
-        FileWriter arq = new FileWriter(System.getProperty("user.dir") + "\\MLP3\\" + dateFormat.format(date) + "\\MLP3_" + dateFormat.format(date) + "_INFO.txt");
+        FileWriter arq = new FileWriter(System.getProperty("user.dir") + "\\MLP4\\" + dateFormat.format(date) + "\\MLP4_" + dateFormat.format(date) + "_INFO.txt");
         PrintWriter gravarArq = new PrintWriter(arq);
 
         System.out.println(dateFormat.format(date));

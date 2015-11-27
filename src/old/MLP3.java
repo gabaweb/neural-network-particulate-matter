@@ -1,3 +1,5 @@
+package old;
+
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -28,7 +30,7 @@ import org.encog.util.arrayutil.NormalizedField;
 import org.encog.util.csv.ReadCSV;
 import org.encog.util.simple.EncogUtility;
 
-public class MLP1 {
+public class MLP3 {
 
     private static final File MYDIR = new File("..");
 
@@ -41,31 +43,31 @@ public class MLP1 {
     private static double TRAIN_TO_ERROR;
 
     private static final NormalizedField normMP = new NormalizedField(NormalizationAction.Normalize, "MP", 100, 0, 1, 0);
-    //private static final NormalizedField normTEMP = new NormalizedField(NormalizationAction.Normalize, "TEMP", 50, 0, 1, 0);
-    //private static final NormalizedField normUR = new NormalizedField(NormalizationAction.Normalize, "UR", 100, 0, 1, 0);
-    //private static final NormalizedField normVV = new NormalizedField(NormalizationAction.Normalize, "VV", 10, 0, 1, 0);
+    private static final NormalizedField normTEMP = new NormalizedField(NormalizationAction.Normalize, "TEMP", 50, 0, 1, 0);
+    private static final NormalizedField normUR = new NormalizedField(NormalizationAction.Normalize, "UR", 100, 0, 1, 0);
+    private static final NormalizedField normVV = new NormalizedField(NormalizationAction.Normalize, "VV", 10, 0, 1, 0);
 
-    public MLP1(int INPUT_WINDOW_SIZE, int CAMADA_OCULTA, int PREDICT_WINDOW_SIZE, double TRAIN_TO_ERROR) {
+    public MLP3(int INPUT_WINDOW_SIZE, int CAMADA_OCULTA, int PREDICT_WINDOW_SIZE, double TRAIN_TO_ERROR) {
 
-        MLP1.INPUT_WINDOW_SIZE = INPUT_WINDOW_SIZE;
-        MLP1.CAMADA_OCULTA = CAMADA_OCULTA;
-        MLP1.PREDICT_WINDOW_SIZE = PREDICT_WINDOW_SIZE;
-        MLP1.TRAIN_TO_ERROR = TRAIN_TO_ERROR;
+        MLP3.INPUT_WINDOW_SIZE = INPUT_WINDOW_SIZE;
+        MLP3.CAMADA_OCULTA = CAMADA_OCULTA;
+        MLP3.PREDICT_WINDOW_SIZE = PREDICT_WINDOW_SIZE;
+        MLP3.TRAIN_TO_ERROR = TRAIN_TO_ERROR;
 
     }
 
     public static TemporalMLDataSet initDataSet() {
         TemporalMLDataSet dataSet = new TemporalMLDataSet(INPUT_WINDOW_SIZE, PREDICT_WINDOW_SIZE);
 
-        TemporalDataDescription MP = new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, true);
+        TemporalDataDescription MP = new TemporalDataDescription(TemporalDataDescription.Type.RAW, false, true);
 
-        //TemporalDataDescription TEMP = new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false);
-        //TemporalDataDescription UR = new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false);
-        //TemporalDataDescription VV = new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false);
+        TemporalDataDescription TEMP = new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false);
+        TemporalDataDescription UR = new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false);
+        TemporalDataDescription VV = new TemporalDataDescription(TemporalDataDescription.Type.RAW, true, false);
         dataSet.addDescription(MP);
-        //dataSet.addDescription(TEMP);
-        //dataSet.addDescription(UR);
-        //dataSet.addDescription(VV);
+        dataSet.addDescription(TEMP);
+        dataSet.addDescription(UR);
+        dataSet.addDescription(VV);
         return dataSet;
     }
 
@@ -97,18 +99,18 @@ public class MLP1 {
         int x = 0;
         while (csv.next()) {
             double MP = csv.getDouble(0);
-            //double TEMP = csv.getDouble(1);
-            //double UR = csv.getDouble(2);
-            //double VV = csv.getDouble(3);
+            double TEMP = csv.getDouble(1);
+            double UR = csv.getDouble(2);
+            double VV = csv.getDouble(3);
 
             int sequenceNumber = x;
 
             TemporalPoint point = new TemporalPoint(trainingData.getDescriptions().size());
             point.setSequence(sequenceNumber);
             point.setData(0, normMP.normalize(MP));
-            //point.setData(1, normTEMP.normalize(TEMP));
-            //point.setData(2, normUR.normalize(UR));
-            //point.setData(3, normVV.normalize(VV));
+            point.setData(1, normTEMP.normalize(TEMP));
+            point.setData(2, normUR.normalize(UR));
+            point.setData(3, normVV.normalize(VV));
             trainingData.getPoints().add(point);
             x++;
         }
@@ -124,8 +126,8 @@ public class MLP1 {
         ReadCSV csv = new ReadCSV(rawFile.toString(), true, ';');
         int x = 0;
         DateFormat dateFormat = new SimpleDateFormat("dd_MM_yyyy_HH_mm_ss");
-        new File(System.getProperty("user.dir") + "\\MLP1\\" + dateFormat.format(date)).mkdirs();
-        FileWriter arq = new FileWriter(System.getProperty("user.dir") + "\\MLP1\\" + dateFormat.format(date) + "\\MLP1_" + dateFormat.format(date) + "_" + numeroExecucao + ".csv");
+        new File(System.getProperty("user.dir") + "\\MLP3\\" + dateFormat.format(date)).mkdirs();
+        FileWriter arq = new FileWriter(System.getProperty("user.dir") + "\\MLP3\\" + dateFormat.format(date) + "\\MLP3_" + dateFormat.format(date) + "_" + numeroExecucao + ".csv");
         PrintWriter gravarArq = new PrintWriter(arq);
         NumberFormat nf = NumberFormat.getNumberInstance(Locale.GERMAN);
         double soma = 0;
@@ -135,9 +137,9 @@ public class MLP1 {
 
         while (csv.next()) {
             double MP = csv.getDouble(0);
-            //double TEMP = csv.getDouble(1);
-            //double UR = csv.getDouble(2);
-            //double VV = csv.getDouble(3);
+            double TEMP = csv.getDouble(1);
+            double UR = csv.getDouble(2);
+            double VV = csv.getDouble(3);
 
             if (trainingData.getPoints().size() >= trainingData.getInputWindowSize()) {
 
@@ -157,9 +159,9 @@ public class MLP1 {
             TemporalPoint point = new TemporalPoint(trainingData.getDescriptions().size());
             point.setSequence(sequenceNumber);
             point.setData(0, normMP.normalize(MP));
-            //point.setData(1, normTEMP.normalize(TEMP));
-            //point.setData(2, normUR.normalize(UR));
-            //point.setData(3, normVV.normalize(VV));
+            point.setData(1, normTEMP.normalize(TEMP));
+            point.setData(2, normUR.normalize(UR));
+            point.setData(3, normVV.normalize(VV));
             trainingData.getPoints().add(point);
             x++;
         }
@@ -198,32 +200,32 @@ public class MLP1 {
         int ENTRADA = 4;
         int OCULTA = 22;
         int PREVER = 1;
-        double ERRO = 0.002;
+        double ERRO = 0.002;//0.0036;
 
         ArrayList<Double> resultados = new ArrayList<>();
 
-        MLP1 execucao1 = new MLP1(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP3 execucao1 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao1.executar(1, date));
-        MLP1 execucao2 = new MLP1(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP3 execucao2 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao2.executar(2, date));
-        MLP1 execucao3 = new MLP1(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP3 execucao3 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao3.executar(3, date));
-        MLP1 execucao4 = new MLP1(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP3 execucao4 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao4.executar(4, date));
-        MLP1 execucao5 = new MLP1(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP3 execucao5 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao5.executar(5, date));
-        MLP1 execucao6 = new MLP1(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP3 execucao6 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao6.executar(6, date));
-        MLP1 execucao7 = new MLP1(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP3 execucao7 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao7.executar(7, date));
-        MLP1 execucao8 = new MLP1(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP3 execucao8 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao8.executar(8, date));
-        MLP1 execucao9 = new MLP1(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP3 execucao9 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao9.executar(9, date));
-        MLP1 execucao10 = new MLP1(ENTRADA, OCULTA, PREVER, ERRO);
+        MLP3 execucao10 = new MLP3(ENTRADA, OCULTA, PREVER, ERRO);
         resultados.add(execucao10.executar(10, date));
 
-        FileWriter arq = new FileWriter(System.getProperty("user.dir") + "\\MLP1\\" + dateFormat.format(date) + "\\MLP1_" + dateFormat.format(date) + "_INFO.txt");
+        FileWriter arq = new FileWriter(System.getProperty("user.dir") + "\\MLP3\\" + dateFormat.format(date) + "\\MLP3_" + dateFormat.format(date) + "_INFO.txt");
         PrintWriter gravarArq = new PrintWriter(arq);
 
         System.out.println(dateFormat.format(date));
